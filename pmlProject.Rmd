@@ -1,0 +1,155 @@
+---
+title: "Predictive Modeling of Proper Exercise Form"
+author: "Miadad Rashid"
+date: "Thursday, September 18, 2014"
+output: html_document
+---
+
+#### HAR (Human Activity Recognition) Project
+
+###### "Human Activity Recognition - HAR - has emerged as a key research area in the last years and is gaining increasing attention by the pervasive computing research community (see picture below, that illustrates the increasing number of publications in HAR with wearable accelerometers), especially for the development of context-aware systems. There are many potential applications for HAR, like: elderly monitoring, life log systems for monitoring energy expenditure and for supporting weight-loss programs, and digital assistants for weight lifting exercises."
+
+from > http://groupware.les.inf.puc-rio.br/har#ixzz3DmmFWkAH"
+
+In the following, we will be creating a predictive model of the [Weight Lifting Exercises Dataset](http://groupware.les.inf.puc-rio.br/static/WLE/WearableComputing_weight_lifting_exercises_biceps_curl_variations.csv "Weight Lifting Dataset") found on the page linked above.  This research aimed to predict the level of how proper individuals were performing an exercise.  The outcome was classified between A-E and is located in the **classe** column.  I will walk you through my intuition for how I chose the variables that the eventual predictive model was based upon and why I chose the particular learning algorithm to create the model.  A couple of things to note before proceeding.
+
+ - There are two datasets we are going to download; **pml-training.csv** and **pml-testing.csv**, which will be saved to **dataTrain** and **dataTest**, respectively.
+ - **dataTrain** has the outcome variable, **classe**, which we will be trying to predict in **dataTest**.
+ - **dataTest** does not include the outcome variable in order to not introduce bias or help influence any readjustments to the predictive model.
+ - **dataTrain** will be divided into **training** and **testing** sets.  All the preprocessing/slicing/manipulating will be done on the **training** set.  
+ - The final predictive model will also be based on **training** set. 
+ - The **testing** set will be used as a preliminary testing ground to base the accuracy of the model and to make necessary readjustments before applying the predictive model to the **dataTest** dataset.
+
+##### Downloading and Slicing the data
+
+```{r getting data}
+set.seed(47)  ## Seed selection for reproducibility
+library(caret)
+
+dataTrain <- read.csv('http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv')  ## Training dataset
+dataTest <- read.csv('http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv')  ## Testing dataset
+```
+
+
+##### Partitioning the dataTrain into the training and testing Datasets
+
+```{r data partitioning}
+## Dividing the training dataset 70/30 by the *classe* variable
+
+inTrain <- createDataPartition(y = dataTrain$classe, p = 0.7, list = F)      
+
+training <- dataTrain[inTrain,]  
+testing <- dataTrain[-inTrain,]
+
+```
+
+##### Preprocessing
+###### We are going first look for missing values within the data and see if we can either impute or remove columns that would only introduce un-needed influence upon the final model.
+```{r find NA}
+percentNa <- colSums(is.na(dataTrain))/length(dataTrain$classe)
+percentNa <- data.frame('Variables' = names(training), 'Percent' = percentNa)
+row.names(percentNa) <- NULL
+q <- qplot(data = percentNa, y = Percent, x = Variables, main = 'Percent NAs contained in each Column')
+q + theme(axis.text.x = element_blank()) + ylab('Percent NA of Variables')
+
+```
+
+```{r NA percent}
+max(percentNa$Percent)
+```
+
+ - As you can see, either the variables contain no NAs, or contain close to all NAs (~98%).
+ - Imputing the missing values of NAs would introduce major bias and speculation into the data.  We instead will chose to remove those columns which have NAs
+
+```{r remove NA}
+training <- training[,complete.cases(t(training))] ## training will only include complete columns
+```
+
+###### Now we will remove columns that have close to zero variance.  Columns that have close to no variance offer no relevant information when creating a predicitive model since their data is close to constant and our outcome is not.
+```{r remove zero variance}
+training <- training[,-nearZeroVar(training)]
+```
+
+###### Visual examination of the columns
+```{r column names}
+names(training)
+```
+
+ - We only want data that directly determine the individual's performance in the exercise
+ - variables such as the individuals name and timestamps, although may follow some correlative pattern with the outcome, does not directly influence exercise performance.
+ - Columns 1-6 will be removed because of the ability to influence the predictive model yet not being a direct influence on exercise performance.
+
+```{r remove 1-6}
+training <- training[,-c(1:6)]
+dim(training) ## Final dimensions of the training set used for predictive modeling
+```
+
+##### Model Fitting with K-Folds
+###### We will use k-folds to create partitions of the **training** set.  Then we create a model from the first fold and apply it to the subsequent folds to cross-validate.  The eventual accuracy will be averages of the individual confusion matrices produced from each fold.
+
+ 1. We will be using a random forest algorithm
+ 2. Creating 10 K-folds then modeling.
+ 3. Apply model to the remaining 9 folds.
+ 4. Calculating accuracy with Confusion Matrices.
+ 5. Creating 5 K-fold then modeling.
+ 6. Apply model to the remaining 4 folds then to the 10 folds created prior
+ 
+Two Hypothesis
+
+ 1. Lowering the size of K will increase the accuracy of the model
+ 2. A model created from a larger dataset, when predicting a smaller dataset, will be more accurate
+
+```{r k10}
+fold10 <- createFolds(y = training$classe, k = 10)
+fit1 <- train(classe~., method = 'rf', data = training[fold10[[1]],])
+results <- data.frame(t(sapply(2:10, function(x){
+    confusionMatrix(training[fold10[[x]],]$classe, predict(fit1, training[fold10[[x]],]))$overall
+})))$Accuracy
+mean(results) ## Average of the accuracy predicitons not including the fold the model was created from
+
+```
+
+ - We are achieving a ~94% accuracy across the remaining 9 folds.  Now let's try creating a model from a larger dataset with 5 fold breaks.
+
+```{r k5}
+fold5 <- createFolds(y = training$classe, k = 5)
+fit2 <- train(classe~., method = 'rf', data = training[fold5[[1]],])
+results <- data.frame(t(sapply(2:5, function(x){
+    confusionMatrix(training[fold5[[x]],]$classe, predict(fit2, training[fold5[[x]],]))$overall
+})))$Accuracy
+mean(results) ## Average of the accuracy predicitons not including the fold the model was created from
+
+## Now we will apply the new model to the smaller folds and compute average accuracy
+results <- data.frame(t(sapply(2:10, function(x){
+    confusionMatrix(training[fold10[[x]],]$classe, predict(fit2, training[fold10[[x]],]))$overall
+})))$Accuracy
+mean(results)
+
+```
+
+ - As you can see lowering the K-folds and using a larger dataset to model from got us a ~96% accuracy.
+ - Then applying that model to the smaller folds (k=10) we achieved a ~97% accuracy.
+ 
+#### Creating the final model and proving accuracy on the testing set.  Added Bonus: showing the model prediction on the dataTest set which does not have the outcomes and comparing it to the correct answers.
+
+##### Testing the final model on the testing set.
+
+ - Note that the **testing** set came from the original **training** data and has not been altered in any way.
+
+```{r finalmodel}
+fit3 <- train(classe~., method = 'rf', data = training)
+confusionMatrix(testing$classe, predict(fit3, testing))
+```
+
+After achieving an accuracy of ~99%, we are ready to apply it to the final **dataTest**.  The **dataTest** set was not used in anyway to creat the predictive model and the actual answers were acquired after the final submission and correction. 
+
+```{r theTest}
+correctAnswers <- c("B","A", "B", "A", "A", "E", "D", "B", "A", "A", "B", "C", "B", "A", "E", "E", "A", "B", "B", "B")  ## Achieved from correct submissions
+
+confusionMatrix(correctAnswers, predict(fit3, dataTest))
+
+```
+
+# Success!  
+
+### The prediction was 100% accurate on the final Data set.
