@@ -32,6 +32,15 @@ This was a course final project for Udacity that I helped design and test.  Basi
 
 [Code Link](https://github.com/thedurphy/Portfolio/blob/master/boston_housing.py)
 
+## Next Word Recommender Beta for Swiftkey
+This was a internship project for Swiftkey where we created a fast method for finishing the next word from user input like in cellphone texts, google search bars, etc.  This project was done in R and deployed in the Shiny engine.
+
+[Exploratory Analysis](https://rpubs.com/theDurphy/milestone)
+
+[Write-Up](https://rpubs.com/theDurphy/wordpredpres)
+
+[App and Code](https://thedurphy.shinyapps.io/wordpred/)
+
 ## Human Activity Recognition
 This was one of my very first project dealing with data gathered from participants cellphone's gyroscopic and accelerometer data.  The objective was to identify their physical activity (sleeping, walking, running, stairs, etc.) by the readings between these sensors.  It was very cool in illustrating the power of machine learning (if you notice, I achieved 100% accuracy on the validation dataset).  This was also one of my projects done in R.
 
